@@ -1,5 +1,6 @@
 package com.github.saem.allthepi.contactbook.api
 
+import com.github.saem.allthepi.contactbook.api.json.objectMapper
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import java.time.Instant

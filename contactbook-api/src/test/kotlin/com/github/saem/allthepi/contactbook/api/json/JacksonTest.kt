@@ -1,4 +1,4 @@
-package com.github.saem.allthepi.contactbook.api
+package com.github.saem.allthepi.contactbook.api.json
 
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import org.junit.jupiter.api.Assertions.*

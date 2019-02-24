@@ -32,6 +32,16 @@
         <module>contactbook-api</module>
     </modules>
 
+    <dependencies>
+        <!-- Let's me run tests across all modules -->
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
     <dependencyManagement>
         <dependencies>
             <!-- Jackson -->

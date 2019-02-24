@@ -1,14 +1,16 @@
 package com.github.saem.allthepi.contactbook.backend.service
 
+import arrow.core.Try
 import com.github.saem.allthepi.contactbook.api.Contact
-import com.github.saem.allthepi.contactbook.api.ContactList
-import com.github.saem.allthepi.contactbook.api.Phone
+import com.github.saem.allthepi.contactbook.api.ContactCreation
+import com.github.saem.allthepi.contactbook.api.NewContact
+import com.github.saem.allthepi.contactbook.api.json.objectMapper
+import com.github.saem.allthepi.contactbook.backend.ContactBook
 import com.github.saem.allthepi.contactbook.backend.database.setupLocalPg
-import com.github.saem.allthepi.contactbook.api.objectMapper
-import com.github.saem.allthepi.contactbook.backend.database.generated.Tables
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import io.ktor.application.Application
+import io.ktor.application.ApplicationCall
 import io.ktor.application.call
 import io.ktor.application.install
 import io.ktor.features.CallId
@@ -17,11 +19,13 @@ import io.ktor.features.ContentNegotiation
 import io.ktor.features.callIdMdc
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
 import io.ktor.jackson.JacksonConverter
+import io.ktor.request.receiveOrNull
 import io.ktor.response.respond
+import io.ktor.response.respondRedirect
 import io.ktor.response.respondText
-import io.ktor.routing.get
-import io.ktor.routing.routing
+import io.ktor.routing.*
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 import io.ktor.util.AttributeKey
@@ -57,6 +61,7 @@ fun Application.mainWithDeps(
 
     val mainDs = HikariDataSource(mainHikariConfig)
     val jooqDsl = DSL.using(mainDs, SQLDialect.POSTGRES_10)
+    val contactBook = ContactBook(jooqDsl)
 
     install(ContentNegotiation) {
         register(ContentType.Application.Json, JacksonConverter(objectMapper))
@@ -82,52 +87,82 @@ fun Application.mainWithDeps(
             call.respondText("{}", ContentType.Application.Json)
         }
         get("/contact_book") {
-            jooqDsl.select(
-                    *Tables.CONTACT.fields(),
-                    *Tables.CONTACT_PHONE.fields())
-                    .from(Tables.CONTACT)
-                    .leftJoin(Tables.CONTACT_PHONE)
-                    .on(Tables.CONTACT.NO.eq(Tables.CONTACT_PHONE.CONTACT_NO))
-                    .limit(10)
-                    .fetch()
-                    .let { rs ->
-                        val contacts = mutableMapOf<Long, Contact>()
-                        val phones = mutableMapOf<Long, Set<Phone>>()
+            when (val contacts = contactBook.listContacts()) {
+                is Try.Success<List<Contact>> -> call.respond(contacts.value)
+                else -> call.respond(HttpStatusCode.InternalServerError)
+            }
+        }
+        get("/contact_book/contact/{id}") {
+            val id = when (val r = Try {
+                UUID.fromString((call.parameters["id"] ?: ""))
+            }) {
+                is Try.Success<UUID> -> r.value
+                else -> return@get call.respond(HttpStatusCode.BadRequest)
+            }
 
-                        rs.map {
-                            contacts[it[Tables.CONTACT.NO]] = Contact(
-                                    id = it[Tables.CONTACT.ID],
-                                    firstName = it[Tables.CONTACT.FIRST_NAME],
-                                    lastName = it[Tables.CONTACT.LAST_NAME],
-                                    createdAt = it[Tables.CONTACT.CREATED_AT].toInstant(),
-                                    modifiedAt = it[Tables.CONTACT.MODIFIED_AT].toInstant()
-                            )
+            return@get when (val contact = contactBook.findContact(id)) {
+                is Try.Success -> call.respond(contact.value)
+                else -> call.respond(HttpStatusCode.BadRequest)
+            }
+        }
+        post("/contact_book/contact") {
+            val newContact = call.receiveOrNull<NewContact>()
+                    ?: return@post call.respond(HttpStatusCode.BadRequest)
 
-                            val phone = Phone(
-                                    id = it[Tables.CONTACT_PHONE.ID],
-                                    countryCode = it[Tables.CONTACT_PHONE.COUNTRY_CODE],
-                                    areaCode = it[Tables.CONTACT_PHONE.AREA_CODE],
-                                    number = it[Tables.CONTACT_PHONE.NUMBER],
-                                    extension = it[Tables.CONTACT_PHONE.EXTENSION],
-                                    raw = it[Tables.CONTACT_PHONE.RAW],
-                                    type = it[Tables.CONTACT_PHONE.TYPE],
-                                    createdAt = it[Tables.CONTACT.CREATED_AT].toInstant(),
-                                    modifiedAt = it[Tables.CONTACT.MODIFIED_AT].toInstant()
-                            )
-                            phones.merge(
-                                    it[Tables.CONTACT_PHONE.CONTACT_NO],
-                                    setOf(phone)
-                            ) { a, b -> a + b }
-                        }
+            return@post when (val creation = contactBook.createContact(newContact)) {
+                is Try.Success<ContactCreation> -> when (val v = creation.value) {
+                    is ContactCreation.Created -> call.created("/contact_book/contact/${v.reference.id}")
+                    is ContactCreation.AlreadyExists -> call.respond(HttpStatusCode.Conflict)
+                }
+                is Try.Failure -> call.respond(HttpStatusCode.InternalServerError)
+            }
+        }
+        put("/contact_book/contact/{id}") {
+            val id = when (val r = Try {
+                UUID.fromString((call.parameters["id"] ?: ""))
+            }) {
+                is Try.Success<UUID> -> r.value
+                else -> return@put call.respond(HttpStatusCode.BadRequest)
+            }
 
-                        contacts.map {
-                            it.value.copy(phone_list = phones[it.key]
-                                    ?.toList()
-                                    ?: emptyList())
-                        }
-                    }
+            val updateData = call.receiveOrNull<Contact.Update.Data>()
+                    ?: return@put call.respond(HttpStatusCode.BadRequest)
 
-            call.respond(ContactList(emptyList()))
+            return@put when (val r = contactBook.updateContact(
+                    Contact.Update(Contact.Reference(id), "", updateData)
+            )) {
+                is Try.Failure -> call.respond(HttpStatusCode.InternalServerError)
+                is Try.Success -> when(r.value) {
+                    is Contact.Update.Result.Updated -> call.respond(HttpStatusCode.OK)
+                    is Contact.Update.Result.UpdatingOldVersion -> call.respond(HttpStatusCode.Conflict)
+                    is Contact.Update.Result.NotFound -> call.respond(HttpStatusCode.NotFound)
+                }
+            }
+        }
+        delete("/contact_book/contact/{id}") {
+            val id = when (val r = Try {
+                UUID.fromString((call.parameters["id"] ?: ""))
+            }) {
+                is Try.Success<UUID> -> r.value
+                else -> return@delete call.respond(HttpStatusCode.BadRequest)
+            }
+
+            when (contactBook.deleteContact(Contact.Reference(id))) {
+                is Try.Success -> call.respond(HttpStatusCode.OK)
+                is Try.Failure -> call.respond(HttpStatusCode.InternalServerError)
+            }
         }
     }
+}
+
+suspend inline fun ApplicationCall.respond(message: Any?) {
+    when (message) {
+        null -> response.pipeline.execute(this, HttpStatusCode.NotFound)
+        else -> respond(message)
+    }
+}
+
+suspend fun ApplicationCall.created(url: String) {
+    response.headers.append(HttpHeaders.Location, url)
+    respond(HttpStatusCode.Created)
 }

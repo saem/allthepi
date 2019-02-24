@@ -13,6 +13,8 @@
     <artifactId>contactbook-backend</artifactId>
 
     <dependencies>
+        <!-- Kotlin -->
+
         <dependency>
             <groupId>org.jetbrains.kotlin</groupId>
             <artifactId>kotlin-stdlib-jdk8</artifactId>
@@ -24,6 +26,14 @@
             <version>${kotlin.version}</version>
         </dependency>
 
+        <!-- ContactBook -->
+
+        <dependency>
+            <groupId>com.github.saem.allthepi</groupId>
+            <artifactId>contactbook-api</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- KTor -->
         <dependency>
             <groupId>io.ktor</groupId>
@@ -33,6 +43,11 @@
         <dependency>
             <groupId>io.ktor</groupId>
             <artifactId>ktor-server-netty</artifactId>
+            <version>${ktor.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.ktor</groupId>
+            <artifactId>ktor-jackson</artifactId>
             <version>${ktor.version}</version>
         </dependency>
 

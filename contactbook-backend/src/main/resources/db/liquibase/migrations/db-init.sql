@@ -21,7 +21,8 @@ CREATE TABLE contact
   last_name   text                                NOT NULL,
   created_at  timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
   modified_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  trace_id    text                                NOT NULL
+  trace_id    text                                NOT NULL,
+  CHECK ( modified_at >= created_at )
 );
 
 CREATE TABLE contact_phone
@@ -37,7 +38,8 @@ CREATE TABLE contact_phone
   raw          text                                NOT NULL,
   created_at   timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
   modified_at  timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  trace_id     text                                NOT NULL
+  trace_id     text                                NOT NULL,
+  CHECK ( modified_at >= created_at )
 );
 
 CREATE TRIGGER update_contact_modified

@@ -10,5 +10,4 @@ import java.text.DateFormat
 val objectMapper: ObjectMapper = jacksonObjectMapper()
         .registerModule(KotlinModule())
         .registerModule(JavaTimeModule())
-        .setPropertyNamingStrategy(PropertyNamingStrategy.SNAKE_CASE)!!
         .setDateFormat(DateFormat.getDateInstance())

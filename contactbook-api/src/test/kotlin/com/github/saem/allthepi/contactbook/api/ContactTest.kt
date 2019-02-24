@@ -13,10 +13,10 @@ internal class ContactTest {
         val expected = objectMapper.readTree("""
             {
             "id": "$uuid",
-            "first_name": "",
-            "last_name": "",
-            "created_at": "2019-02-18T23:20:59.274Z",
-            "modified_at": "2019-02-19T00:20:59.317Z"
+            "firstName": "",
+            "lastName": "",
+            "createdAt": "2019-02-18T23:20:59.274Z",
+            "modifiedAt": "2019-02-19T00:20:59.317Z"
             }
         """.trimIndent())
 

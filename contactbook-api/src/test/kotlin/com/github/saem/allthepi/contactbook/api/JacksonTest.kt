@@ -9,23 +9,23 @@ internal class JacksonTest {
     @Test
     fun snakeCaseEnabledSerialization() {
         val actual = objectMapper.readTree(objectMapper.writeValueAsString(
-                ShouldSnakeCase("foo", "bar")))
+                ShouldNotSnakeCase("foo", "bar")))
         val expected = objectMapper.readTree("""
-            { "property_to_snake": "foo", "property_is_snake": "bar" }
+            { "camelCase": "foo", "property_is_snake": "bar" }
         """.trimIndent())
 
         assertEquals(expected.toString(), actual.toString())
     }
 
     @Test
-    fun snakeCaseEnabledDeserialization() {
+    fun snakeCaseDisabledDeserialization() {
         val jsonString = """
-            { "property_to_snake": "foo", "property_is_snake": "bar" }
+            { "camelCase": "foo", "property_is_snake": "bar" }
         """.trimIndent()
         val actual = objectMapper.readValue(jsonString,
-                ShouldSnakeCase::class.javaObjectType)
+                ShouldNotSnakeCase::class.javaObjectType)
 
-        assertEquals(ShouldSnakeCase("foo", "bar"), actual)
+        assertEquals(ShouldNotSnakeCase("foo", "bar"), actual)
     }
 
     @Test
@@ -48,8 +48,8 @@ internal class JacksonTest {
     }
 }
 
-internal data class ShouldSnakeCase(
-        val propertyToSnake: String,
+internal data class ShouldNotSnakeCase(
+        val camelCase: String,
         val property_is_snake: String
 )
 

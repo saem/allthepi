@@ -2,8 +2,6 @@ package com.github.saem.allthepi.contactbook.backend.service
 
 import arrow.core.Try
 import com.github.saem.allthepi.contactbook.api.Contact
-import com.github.saem.allthepi.contactbook.api.ContactCreation
-import com.github.saem.allthepi.contactbook.api.NewContact
 import com.github.saem.allthepi.contactbook.api.json.objectMapper
 import com.github.saem.allthepi.contactbook.backend.ContactBook
 import com.github.saem.allthepi.contactbook.backend.database.setupLocalPg
@@ -23,7 +21,6 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.jackson.JacksonConverter
 import io.ktor.request.receiveOrNull
 import io.ktor.response.respond
-import io.ktor.response.respondRedirect
 import io.ktor.response.respondText
 import io.ktor.routing.*
 import io.ktor.server.engine.embeddedServer
@@ -92,6 +89,12 @@ fun Application.mainWithDeps(
                 else -> call.respond(HttpStatusCode.InternalServerError)
             }
         }
+        get("/contact_book/contact") {
+            when (val contacts = contactBook.listContacts2()) {
+                is Try.Success<List<Contact>> -> call.respond(contacts.value)
+                else -> call.respond(HttpStatusCode.InternalServerError)
+            }
+        }
         get("/contact_book/contact/{id}") {
             val id = when (val r = Try {
                 UUID.fromString((call.parameters["id"] ?: ""))
@@ -106,13 +109,17 @@ fun Application.mainWithDeps(
             }
         }
         post("/contact_book/contact") {
-            val newContact = call.receiveOrNull<NewContact>()
+            val newContactData = call.receiveOrNull<Contact.Create.Data>()
                     ?: return@post call.respond(HttpStatusCode.BadRequest)
 
+            val traceId = call.attributes[requestIdKey]
+
+            val newContact = Contact.Create(traceId, newContactData)
+
             return@post when (val creation = contactBook.createContact(newContact)) {
-                is Try.Success<ContactCreation> -> when (val v = creation.value) {
-                    is ContactCreation.Created -> call.created("/contact_book/contact/${v.reference.id}")
-                    is ContactCreation.AlreadyExists -> call.respond(HttpStatusCode.Conflict)
+                is Try.Success<Contact.Create.Result> -> when (val v = creation.value) {
+                    is Contact.Create.Result.Created -> call.created("/contact_book/contact/${v.reference.id}")
+                    is Contact.Create.Result.AlreadyExists -> call.respond(HttpStatusCode.Conflict)
                 }
                 is Try.Failure -> call.respond(HttpStatusCode.InternalServerError)
             }
@@ -125,16 +132,34 @@ fun Application.mainWithDeps(
                 else -> return@put call.respond(HttpStatusCode.BadRequest)
             }
 
+            val version = when (val v =
+                    call.request.headers[HttpHeaders.IfMatch]
+                            ?.split("\\s*,\\s*".toRegex())
+                            ?.map { it.removePrefix("W/") }
+                            ?.filter { it.isNotEmpty() }
+                            ?.mapNotNull { it.toLongOrNull() }
+                            ?.firstOrNull()
+                ) {
+                null -> return@put call.respond(
+                        HttpStatusCode.PreconditionFailed)
+                else -> v
+            }
+
             val updateData = call.receiveOrNull<Contact.Update.Data>()
                     ?: return@put call.respond(HttpStatusCode.BadRequest)
 
-            return@put when (val r = contactBook.updateContact(
-                    Contact.Update(Contact.Reference(id), "", updateData)
+            val traceId = call.attributes[requestIdKey]
+
+            return@put when (val r = contactBook.updateContact(Contact.Update(
+                    Contact.Reference(id),
+                    version,
+                    traceId,
+                    updateData)
             )) {
                 is Try.Failure -> call.respond(HttpStatusCode.InternalServerError)
-                is Try.Success -> when(r.value) {
+                is Try.Success -> when (r.value) {
                     is Contact.Update.Result.Updated -> call.respond(HttpStatusCode.OK)
-                    is Contact.Update.Result.UpdatingOldVersion -> call.respond(HttpStatusCode.Conflict)
+                    is Contact.Update.Result.VersionOutOfDate -> call.respond(HttpStatusCode.Conflict)
                     is Contact.Update.Result.NotFound -> call.respond(HttpStatusCode.NotFound)
                 }
             }
@@ -147,7 +172,24 @@ fun Application.mainWithDeps(
                 else -> return@delete call.respond(HttpStatusCode.BadRequest)
             }
 
-            when (contactBook.deleteContact(Contact.Reference(id))) {
+            val version = when (val v =
+                    call.request.headers[HttpHeaders.IfMatch]
+                            ?.split("\\s*,\\s*".toRegex())
+                            ?.map { it.removePrefix("W/") }
+                            ?.filter { it.isNotEmpty() }
+                            ?.mapNotNull { it.toLongOrNull() }
+                            ?.firstOrNull()
+                ) {
+                null -> return@delete call.respond(
+                        HttpStatusCode.PreconditionFailed)
+                else -> v
+            }
+
+            val traceId = call.attributes[requestIdKey]
+
+            when (contactBook.deleteContact(
+                    Contact.Delete(id, version, traceId))
+                ) {
                 is Try.Success -> call.respond(HttpStatusCode.OK)
                 is Try.Failure -> call.respond(HttpStatusCode.InternalServerError)
             }

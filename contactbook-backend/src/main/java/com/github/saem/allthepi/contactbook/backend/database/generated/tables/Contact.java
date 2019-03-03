@@ -43,7 +43,7 @@ import org.jooq.impl.TableImpl;
 @SuppressWarnings({ "all", "unchecked", "rawtypes" })
 public class Contact extends TableImpl<ContactRecord> {
 
-    private static final long serialVersionUID = 553880107;
+    private static final long serialVersionUID = -904449247;
 
     /**
      * The reference instance of <code>contact_book.contact</code>
@@ -87,6 +87,11 @@ public class Contact extends TableImpl<ContactRecord> {
      * The column <code>contact_book.contact.modified_at</code>.
      */
     public final TableField<ContactRecord, Timestamp> MODIFIED_AT = createField("modified_at", org.jooq.impl.SQLDataType.TIMESTAMP.nullable(false).defaultValue(org.jooq.impl.DSL.field("CURRENT_TIMESTAMP", org.jooq.impl.SQLDataType.TIMESTAMP)), this, "");
+
+    /**
+     * The column <code>contact_book.contact.version</code>.
+     */
+    public final TableField<ContactRecord, Long> VERSION = createField("version", org.jooq.impl.SQLDataType.BIGINT.nullable(false).defaultValue(org.jooq.impl.DSL.field("0", org.jooq.impl.SQLDataType.BIGINT)), this, "");
 
     /**
      * The column <code>contact_book.contact.trace_id</code>.

@@ -21,6 +21,7 @@ CREATE TABLE contact
   last_name   text                                NOT NULL,
   created_at  timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
   modified_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+  version     BIGINT    DEFAULT 0                 NOT NULL,
   trace_id    text                                NOT NULL,
   CHECK ( modified_at >= created_at )
 );
@@ -38,6 +39,7 @@ CREATE TABLE contact_phone
   raw          text                                NOT NULL,
   created_at   timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
   modified_at  timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+  version      BIGINT    DEFAULT 0                 NOT NULL,
   trace_id     text                                NOT NULL,
   CHECK ( modified_at >= created_at )
 );

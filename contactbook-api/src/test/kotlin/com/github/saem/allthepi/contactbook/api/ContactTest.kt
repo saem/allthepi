@@ -26,7 +26,8 @@ internal class ContactTest {
                 firstName = "",
                 lastName = "",
                 createdAt = created,
-                modifiedAt = modified
+                modifiedAt = modified,
+                version = 0
         ))
 
         assertEquals(expected.toString(), actual)

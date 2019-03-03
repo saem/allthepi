@@ -13,55 +13,65 @@ data class Contact(
         val lastName: String,
         val createdAt: Instant,
         val modifiedAt: Instant,
+        val version: Version,
         val phone_list: List<Phone> = emptyList()
 ) {
     data class Reference(val id: UUID)
 
     data class Create(
-            val id: UUID = UUID.randomUUID(),
-            val firstName: String,
-            val lastName: String
+            val traceId: TraceId,
+            val data: Create.Data
     ) {
+        data class Data (
+                val id: UUID = UUID.randomUUID(),
+                val firstName: String,
+                val lastName: String
+        )
+
         sealed class Result {
-            data class Created(val reference: Contact.Reference) : Result() {
-                constructor(uuid: UUID) : this(Contact.Reference(uuid))
+            data class Created(
+                    val reference: Contact.Reference,
+                    val version: Version
+            ) : Result() {
+                constructor(uuid: UUID, version: Version) :
+                        this(Contact.Reference(uuid), version)
             }
 
             data class AlreadyExists(
                     val contactData: Create,
-                    private val cause: Throwable
+                    val cause: Throwable
             ) : Result(), Error
         }
     }
 
-    data class Read(
-            val id: UUID,
-            val firstName: String,
-            val lastName: String,
-            val createdAt: Instant,
-            val modifiedAt: Instant,
-            val phone_list: List<Phone> = emptyList()
-    )
-
     data class Update(
             val contactReference: Reference,
-            val lastSeenVersion: String,
+            val lastSeenVersion: Version,
+            val traceId: TraceId,
             val data: Contact.Update.Data
     ) {
         data class Data(val firstName: String, val lastName: String)
 
         sealed class Result {
-            data class Updated(val version: String) : Result()
+            data class Updated(val version: Version) : Result()
 
             data class NotFound(val contactReference: Reference) : Result()
 
-            data class UpdatingOldVersion(val newVersion: String) : Result()
+            data class VersionOutOfDate(val newVersion: String) : Result()
         }
     }
 
-    data class Delete(val reference: Reference) {
+    data class Delete(
+            val reference: Reference,
+            val lastSeenVersion: Version,
+            val traceId: TraceId
+    ) {
+        constructor(uuid: UUID, lastSeenVersion: Version, traceId: TraceId) :
+                this(Contact.Reference(uuid), lastSeenVersion, traceId)
+
         sealed class Result {
             object Deleted : Result()
+            object VersionOutOfDate : Result()
         }
     }
 }
@@ -75,7 +85,8 @@ data class Phone(
         val extension: String,
         val raw: String,
         val createdAt: Instant,
-        val modifiedAt: Instant
+        val modifiedAt: Instant,
+        val version: Version
 )
 
 data class Email(
@@ -111,21 +122,6 @@ data class NewContact(
         val lastName: String
 )
 
-sealed class ContactCreation {
-    data class Created(val reference: Contact.Reference) : ContactCreation() {
-        constructor(uuid: UUID) : this(Contact.Reference(uuid))
-    }
-
-    data class AlreadyExists(
-            val contactData: NewContact,
-            private val cause: Throwable
-    ) : ContactCreation(), Error
-}
-
-sealed class ContactDeletion {
-    object Deleted : ContactDeletion()
-}
-
 data class AddPhone(
         val id: UUID = UUID.randomUUID(),
         val type: String,
@@ -149,3 +145,5 @@ data class AddAddress(
 
 interface Error
 interface EntityReference
+typealias Version = Long
+typealias TraceId = String

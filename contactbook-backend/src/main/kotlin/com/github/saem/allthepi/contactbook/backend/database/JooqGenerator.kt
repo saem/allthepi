@@ -1,6 +1,5 @@
 package com.github.saem.allthepi.contactbook.backend.database
 
-import com.opentable.db.postgres.embedded.EmbeddedPostgres
 import org.jooq.codegen.GenerationTool
 
 fun main() {

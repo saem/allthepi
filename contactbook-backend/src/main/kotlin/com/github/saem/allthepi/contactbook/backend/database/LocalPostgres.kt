@@ -4,6 +4,11 @@ import com.opentable.db.postgres.embedded.EmbeddedPostgres
 import com.opentable.db.postgres.embedded.LiquibasePreparer
 import kotlin.concurrent.thread
 
+fun main() {
+    setupLocalPg()
+
+    while (true) {}
+}
 
 fun setupLocalPg() {
     val postgresProcess = pgStart()

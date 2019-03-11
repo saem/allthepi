@@ -5,10 +5,7 @@ import arrow.core.recoverWith
 import com.github.saem.allthepi.contactbook.api.Contact
 import com.github.saem.allthepi.contactbook.api.Phone
 import com.github.saem.allthepi.contactbook.backend.database.generated.Tables
-import org.jooq.Configuration
-import org.jooq.DSLContext
-import org.jooq.Record
-import org.jooq.Result
+import org.jooq.*
 import org.jooq.exception.DataAccessException
 import org.jooq.impl.DSL
 import org.jooq.impl.DSL.field
@@ -127,44 +124,74 @@ class ContactBook(private val jooqDsl: DSLContext) {
     }
 
     fun updateContact(update: Contact.Update): Try<Contact.Update.Result> = Try {
-        jooqDsl.update(Tables.CONTACT)
+        val updateQueryCteName = "contactUpdate"
+        val updateQuery = jooqDsl.update(Tables.CONTACT)
                 .set(Tables.CONTACT.FIRST_NAME, update.data.firstName.trim())
                 .set(Tables.CONTACT.LAST_NAME, update.data.lastName.trim())
                 .where(Tables.CONTACT.ID.eq(update.contactReference.id))
-                .returning(Tables.CONTACT.VERSION)
+                .and(Tables.CONTACT.VERSION.eq(update.lastSeenVersion))
+                .returning(
+                        Tables.CONTACT.NO,
+                        Tables.CONTACT.ID,
+                        Tables.CONTACT.VERSION)
+
+        val updateQueryContactNo = DSL.field(
+                name(updateQueryCteName, Tables.CONTACT.NO.name),
+                Long::class.java)
+        val updateQueryContactId = DSL.field(
+                name(updateQueryCteName, Tables.CONTACT.ID.name),
+                UUID::class.java)
+
+        val existenceUpdatedAndNewVersionQuery = jooqDsl
+                .select(Tables.CONTACT.VERSION, updateQueryContactNo)
+                .from(Tables.CONTACT)
+                .leftJoin(name(updateQueryCteName))
+                .on(Tables.CONTACT.ID.eq(updateQueryContactId))
+                .where(Tables.CONTACT.ID.eq(updateQueryContactId))
+
+        jooqDsl.resultQuery("""
+            WITH "$updateQueryCteName" AS ({0})
+            {1}
+        """.trimIndent(),
+                updateQuery,
+                existenceUpdatedAndNewVersionQuery)
                 .fetchOne()
                 .let {
-                    Contact.Update.Result.Updated(it[Tables.CONTACT.VERSION])
+                    when {
+                        it == null -> Contact.Update.Result.NotFound(update.contactReference)
+                        it[1] != null -> Contact.Update.Result.Updated(it[1] as Long)
+                        else -> Contact.Update.Result.VersionOutOfDate(it[0] as Long)
+                    }
                 }
     }
 
-    fun deleteContact(delete: Contact.Delete): Try<Contact.Delete.Result> {
-        return Try {
-            val contactCte = name("contact").fields("no", "versionMatch")
-                    .`as`(jooqDsl.select(
-                            Tables.CONTACT.NO,
-                            field(Tables.CONTACT.VERSION
-                                    .eq(delete.lastSeenVersion))
-                    ).from(Tables.CONTACT))
+    fun deleteContact(delete: Contact.Delete): Try<Contact.Delete.Result> = Try {
+        val contactCte = name("contact").fields("no", "versionMatch")
+                .`as`(jooqDsl.select(
+                        Tables.CONTACT.NO,
+                        field(Tables.CONTACT.VERSION
+                                .eq(delete.lastSeenVersion)))
+                        .from(Tables.CONTACT)
+                        .where(Tables.CONTACT.ID.eq(delete.reference.id))
+                )
 
-            val noField = contactCte.field("contact", Long::class.java)
-            val versionMatch = contactCte.field("versionMatch",
-                    Boolean::class.java)
+        val noField = contactCte.field("contact", Long::class.java)
+        val versionMatch = contactCte.field("versionMatch",
+                Boolean::class.java)
 
-            val result = jooqDsl.with(contactCte)
-                    .delete(Tables.CONTACT)
-                    .where(Tables.CONTACT.NO.eq(noField))
-                    .and(versionMatch.isTrue)
-                    .returningResult(versionMatch)
-                    .fetchOptional()
+        val result = jooqDsl.with(contactCte)
+                .delete(Tables.CONTACT)
+                .where(Tables.CONTACT.NO.eq(noField))
+                .and(versionMatch.isTrue)
+                .returningResult(versionMatch)
+                .fetchOptional()
 
-            result.map {
-                when (it.value1()) {
-                    false -> Contact.Delete.Result.VersionOutOfDate
-                    else -> Contact.Delete.Result.Deleted
-                }
-            }.orElse(Contact.Delete.Result.Deleted)
-        }
+        result.map {
+            when (it.value1()) {
+                false -> Contact.Delete.Result.VersionOutOfDate
+                else -> Contact.Delete.Result.Deleted
+            }
+        }.orElse(Contact.Delete.Result.Deleted)
     }
 
     private fun resultSetToContact(rs: Result<Record>): List<Contact> {

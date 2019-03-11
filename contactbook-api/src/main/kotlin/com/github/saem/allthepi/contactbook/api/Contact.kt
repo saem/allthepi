@@ -57,7 +57,9 @@ data class Contact(
 
             data class NotFound(val contactReference: Reference) : Result()
 
-            data class VersionOutOfDate(val newVersion: String) : Result()
+            data class VersionOutOfDate(val newVersion: String) : Result() {
+                constructor(newVersion: Long) : this(newVersion.toString())
+            }
         }
     }
 
@@ -116,12 +118,6 @@ data class Address(
         val modifiedAt: Instant
 )
 
-data class NewContact(
-        val id: UUID = UUID.randomUUID(),
-        val firstName: String,
-        val lastName: String
-)
-
 data class AddPhone(
         val id: UUID = UUID.randomUUID(),
         val type: String,
@@ -144,6 +140,5 @@ data class AddAddress(
 )
 
 interface Error
-interface EntityReference
 typealias Version = Long
 typealias TraceId = String

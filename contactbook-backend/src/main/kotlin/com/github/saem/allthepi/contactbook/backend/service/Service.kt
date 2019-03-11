@@ -90,7 +90,7 @@ fun Application.mainWithDeps(
             }
         }
         get("/contact_book/contact") {
-            when (val contacts = contactBook.listContacts2()) {
+            when (val contacts = contactBook.listContacts()) {
                 is Try.Success<List<Contact>> -> call.respond(contacts.value)
                 else -> call.respond(HttpStatusCode.InternalServerError)
             }

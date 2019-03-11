@@ -112,4 +112,49 @@ internal class ContactBookTest {
             }
         }
     }
+
+    @Test
+    fun listContacts() {
+        val contactBook = ContactBook(jooqDsl)
+
+        contactBook.createContact(Contact.Create("", Contact.Create.Data(
+                firstName = "Firstfirst",
+                lastName = "Firstlast"
+        )))
+
+        contactBook.createContact(Contact.Create("", Contact.Create.Data(
+                firstName = "Secondfirst",
+                lastName = "Secondlast"
+        )))
+
+        contactBook.listContacts().let {
+            when (it) {
+                is Try.Failure -> fail<Any>("Query failed", it.exception)
+                is Try.Success -> assertEquals(3, it.value.size)
+            }
+        }
+    }
+
+    @Test
+    fun findContact() {
+        val contactBook = ContactBook(jooqDsl)
+
+        contactBook.createContact(Contact.Create("",
+                Contact.Create.Data(
+                        firstName = "Firstfirst",
+                        lastName = "Firstlast"
+                )))
+                .flatMap {
+                    when (it) {
+                        is Contact.Create.Result.Created -> contactBook.findContact(it.reference.id)
+                        else -> fail("Contact wasn't created with result: $it")
+                    }
+                }
+                .let {
+                    when (it) {
+                        is Try.Failure -> fail("Failed to get contact", it.exception)
+                        is Try.Success -> assertTrue(true)
+                    }
+                }
+    }
 }

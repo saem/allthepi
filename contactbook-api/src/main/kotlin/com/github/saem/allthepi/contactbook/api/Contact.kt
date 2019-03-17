@@ -74,6 +74,7 @@ data class Contact(
         sealed class Result {
             object Deleted : Result()
             object VersionOutOfDate : Result()
+            object NotFound : Result()
         }
     }
 }

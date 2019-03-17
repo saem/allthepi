@@ -1,6 +1,7 @@
 package com.github.saem.allthepi.contactbook.backend.service
 
 import arrow.core.Try
+import arrow.core.recover
 import com.github.saem.allthepi.contactbook.api.Contact
 import com.github.saem.allthepi.contactbook.api.json.objectMapper
 import com.github.saem.allthepi.contactbook.backend.ContactBook
@@ -187,12 +188,17 @@ fun Application.mainWithDeps(
 
             val traceId = call.attributes[requestIdKey]
 
-            when (contactBook.deleteContact(
-                    Contact.Delete(id, version, traceId))
-                ) {
-                is Try.Success -> call.respond(HttpStatusCode.OK)
-                is Try.Failure -> call.respond(HttpStatusCode.InternalServerError)
-            }
+            contactBook.deleteContact(Contact.Delete(id, version, traceId))
+                    .map {
+                        when (it) {
+                            Contact.Delete.Result.Deleted,
+                            Contact.Delete.Result.NotFound -> HttpStatusCode.OK
+                            Contact.Delete.Result.VersionOutOfDate ->
+                                HttpStatusCode.Conflict
+                        }
+                    }
+                    .recover { HttpStatusCode.InternalServerError }
+                    .also { call.respond(it) }
         }
     }
 }

@@ -157,4 +157,28 @@ internal class ContactBookTest {
                     }
                 }
     }
+
+    @Test
+    fun deleteContact() {
+        val contactBook = ContactBook(jooqDsl)
+
+        contactBook.createContact(Contact.Create("",
+                Contact.Create.Data(
+                        firstName = "Firstdelete",
+                        lastName = "Lastdelete"
+                )))
+                .flatMap {
+                    when (it) {
+                        is Contact.Create.Result.Created -> contactBook
+                                .deleteContact(Contact.Delete(it.reference, it.version, ""))
+                        else -> fail("Contact wasn't created with result: $it")
+                    }
+                }
+                .let {
+                    when (it) {
+                        is Try.Failure -> fail("Failed to delete contact", it.exception)
+                        is Try.Success -> assertTrue(true)
+                    }
+                }
+    }
 }
